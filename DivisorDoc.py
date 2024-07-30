@@ -1,7 +1,7 @@
 from docx import Document
 from docx.shared import Inches
 from io import BytesIO
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import os
 import re
 from docx.image.exceptions import UnrecognizedImageError
@@ -68,20 +68,28 @@ def copy_paragraph(paragraph, new_doc, template_doc):
             try:
                 # Obter o tamanho original da imagem
                 with BytesIO(image_part.blob) as image_file:
-                    image = Image.open(image_file)
-                    width, height = image.size
-                    dpi = image.info.get('dpi', (96, 96))[0]  # Assume 96 DPI se não especificado
-                    image.close()
+                    try:
+                        image = Image.open(image_file)
+                        width, height = image.size
+                        dpi = image.info.get('dpi', (96, 96))[0]  # Assume 96 DPI se não especificado
+                        image.close()
 
-                # Converter o tamanho da imagem para polegadas para docx
-                width_in_inches = width / dpi
-                height_in_inches = height / dpi
+                        # Converter o tamanho da imagem para polegadas para docx
+                        width_in_inches = width / dpi
+                        height_in_inches = height / dpi
 
-                # Adicionar imagem ao novo documento com tamanho original
-                new_run.add_picture(BytesIO(image_part.blob), width=Inches(width_in_inches), height=Inches(height_in_inches))
-            
+                        # Adicionar imagem ao novo documento com tamanho original
+                        new_run.add_picture(BytesIO(image_part.blob), width=Inches(width_in_inches), height=Inches(height_in_inches))
+                    
+                    except UnidentifiedImageError:
+                        print(f"Imagem não identificada (UnidentifiedImageError): {rId}")
+                        continue
+
             except UnrecognizedImageError:
                 print(f"Imagem não reconhecida: {rId}")
+                continue
+            except Exception as e:
+                print(f"Erro ao processar imagem {rId}: {e}")
                 continue
 
     return new_paragraph
@@ -121,7 +129,7 @@ def split_document_by_heading(doc_path, output_dir, template_path):
     if current_doc:
         current_doc.save(os.path.join(output_dir, f"{re.sub(r'[\\/*?:\"<>|]', '', current_heading)}.docx"))
 
-# Exemplo de uso:
+
 doc_path = ""
 output_dir = ""
 template_path = ""
