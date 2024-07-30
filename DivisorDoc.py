@@ -122,7 +122,7 @@ def split_document_by_heading(doc_path, output_dir, template_path):
         current_doc.save(os.path.join(output_dir, f"{re.sub(r'[\\/*?:\"<>|]', '', current_heading)}.docx"))
 
 # Exemplo de uso:
-doc_path = "caminho_para_seu_documento.docx"
-output_dir = "caminho_para_diretorio_de_saida"
-template_path = "caminho_para_template.docx"
+doc_path = ""
+output_dir = ""
+template_path = ""
 split_document_by_heading(doc_path, output_dir, template_path)
