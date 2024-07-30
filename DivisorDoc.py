@@ -4,6 +4,7 @@ from io import BytesIO
 from PIL import Image
 import os
 import re
+from docx.image.exceptions import UnrecognizedImageError
 
 def get_or_create_style(new_doc, template_doc, style_name):
     try:
@@ -64,19 +65,24 @@ def copy_paragraph(paragraph, new_doc, template_doc):
             rId = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
             image_part = paragraph.part.related_parts[rId]
 
-            # Obter o tamanho original da imagem
-            with BytesIO(image_part.blob) as image_file:
-                image = Image.open(image_file)
-                width, height = image.size
-                dpi = image.info.get('dpi', (96, 96))[0]  # Assume 96 DPI se não especificado
-                image.close()
+            try:
+                # Obter o tamanho original da imagem
+                with BytesIO(image_part.blob) as image_file:
+                    image = Image.open(image_file)
+                    width, height = image.size
+                    dpi = image.info.get('dpi', (96, 96))[0]  # Assume 96 DPI se não especificado
+                    image.close()
 
-            # Converter o tamanho da imagem para polegadas para docx
-            width_in_inches = width / dpi
-            height_in_inches = height / dpi
+                # Converter o tamanho da imagem para polegadas para docx
+                width_in_inches = width / dpi
+                height_in_inches = height / dpi
 
-            # Adicionar imagem ao novo documento com tamanho original
-            new_run.add_picture(BytesIO(image_part.blob), width=Inches(width_in_inches), height=Inches(height_in_inches))
+                # Adicionar imagem ao novo documento com tamanho original
+                new_run.add_picture(BytesIO(image_part.blob), width=Inches(width_in_inches), height=Inches(height_in_inches))
+            
+            except UnrecognizedImageError:
+                print(f"Imagem não reconhecida: {rId}")
+                continue
 
     return new_paragraph
 
@@ -116,7 +122,7 @@ def split_document_by_heading(doc_path, output_dir, template_path):
         current_doc.save(os.path.join(output_dir, f"{re.sub(r'[\\/*?:\"<>|]', '', current_heading)}.docx"))
 
 # Exemplo de uso:
-doc_path = ""
-output_dir = ""
-template_path = ""
+doc_path = "caminho_para_seu_documento.docx"
+output_dir = "caminho_para_diretorio_de_saida"
+template_path = "caminho_para_template.docx"
 split_document_by_heading(doc_path, output_dir, template_path)
