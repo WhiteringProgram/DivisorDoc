@@ -1,10 +1,11 @@
 from docx import Document
 from docx.shared import Inches
+from docx.image.exceptions import UnrecognizedImageError
 from io import BytesIO
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
+from PIL import UnidentifiedImageError
 import os
 import re
-from docx.image.exceptions import UnrecognizedImageError
 
 def get_or_create_style(new_doc, template_doc, style_name):
     try:
@@ -18,6 +19,33 @@ def get_or_create_style(new_doc, template_doc, style_name):
         except KeyError:
             new_style = new_doc.styles.add_style(style_name, 1)
             return new_style
+
+def extract_images(run, new_run):
+    for blip in run.element.xpath('.//a:blip'):
+        rId = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+        image_part = run.part.related_parts[rId]
+
+        try:
+            # Tentar abrir a imagem
+            image = Image.open(BytesIO(image_part.blob))
+            width, height = image.size
+            dpi = image.info.get('dpi', (96, 96))[0]  # Assume 96 DPI se não especificado
+            image.close()
+
+            # Converter o tamanho da imagem para polegadas para docx
+            width_in_inches = width / dpi
+            height_in_inches = height / dpi
+
+            # Adicionar imagem ao novo documento com tamanho original
+            new_run.add_picture(BytesIO(image_part.blob), width=Inches(width_in_inches), height=Inches(height_in_inches))
+
+        except (UnrecognizedImageError, UnidentifiedImageError):
+            print(f"Erro ao reconhecer a imagem: {rId}")
+            continue
+        except Exception as e:
+            print(f"Erro ao processar imagem {rId}: {e}")
+            continue
+        
 
 def copy_paragraph(paragraph, new_doc, template_doc):
     new_paragraph = new_doc.add_paragraph()
@@ -60,37 +88,7 @@ def copy_paragraph(paragraph, new_doc, template_doc):
         new_run.font.size = run.font.size
         new_run.font.color.rgb = run.font.color.rgb
 
-        # Preservar imagens dentro dos runs
-        for blip in run.element.xpath('.//a:blip'):
-            rId = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
-            image_part = paragraph.part.related_parts[rId]
-
-            try:
-                # Obter o tamanho original da imagem
-                with BytesIO(image_part.blob) as image_file:
-                    try:
-                        image = Image.open(image_file)
-                        width, height = image.size
-                        dpi = image.info.get('dpi', (96, 96))[0]  # Assume 96 DPI se não especificado
-                        image.close()
-
-                        # Converter o tamanho da imagem para polegadas para docx
-                        width_in_inches = width / dpi
-                        height_in_inches = height / dpi
-
-                        # Adicionar imagem ao novo documento com tamanho original
-                        new_run.add_picture(BytesIO(image_part.blob), width=Inches(width_in_inches), height=Inches(height_in_inches))
-                    
-                    except UnidentifiedImageError:
-                        print(f"Imagem não identificada (UnidentifiedImageError): {rId}")
-                        continue
-
-            except UnrecognizedImageError:
-                print(f"Imagem não reconhecida: {rId}")
-                continue
-            except Exception as e:
-                print(f"Erro ao processar imagem {rId}: {e}")
-                continue
+        extract_images(run, new_run)
 
     return new_paragraph
 
@@ -128,7 +126,6 @@ def split_document_by_heading(doc_path, output_dir, template_path):
     # Salvar o último documento
     if current_doc:
         current_doc.save(os.path.join(output_dir, f"{re.sub(r'[\\/*?:\"<>|]', '', current_heading)}.docx"))
-
 
 doc_path = ""
 output_dir = ""
